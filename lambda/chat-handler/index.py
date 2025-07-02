@@ -17,14 +17,14 @@ BEDROCK_MODEL_ID = os.environ.get('BEDROCK_MODEL_ID')
 # Check if Kendra is configured
 KENDRA_ENABLED = KENDRA_INDEX_ID and KENDRA_INDEX_ID != ''
 
-# --- TEMPORARY for TESTING ---
+# TEMPORARY for TESTING 
 FAKE_KENDRA_CONTEXT = """
 Parking is available in the 25th Street Municipal Garage, located at 209 25th St, Virginia Beach, VA 23451.
 The garage is open 24 hours a day, 7 days a week. The rate is $2.00 per hour, with a daily maximum of $20.00.
 Special event parking rates may apply. Payment can be made via credit card at the exit gate.
 Overnight parking is permitted.
 """
-# --- END TEMPORARY ---
+
 
 
 def should_retrieve_knowledge(user_message):
@@ -226,11 +226,26 @@ def handler(event, context):
             # Step 4: Generate general response without knowledge retrieval
             response = generate_general_response(user_message)
 
-        return form_lex_response(event, response)
+        # Return the response in the format expected by the chat-api
+        return {
+            'messages': [
+                {
+                    'contentType': 'PlainText',
+                    'content': response,
+                },
+            ],
+        }
 
     except Exception as error:
         print(f"Error in chat handler: {error}")
-        return form_lex_response(event, "I'm sorry, I encountered a technical issue. Please try again later.")
+        return {
+            'messages': [
+                {
+                    'contentType': 'PlainText',
+                    'content': "I'm sorry, I encountered a technical issue. Please try again later.",
+                },
+            ],
+        }
 
 
 def form_lex_response(event, message):

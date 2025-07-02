@@ -61,16 +61,15 @@ class CovbChatbotStack(Stack):
         )
         scheduled_crawl_rule.add_target(targets.LambdaFunction(data_ingestion_lambda))
 
-        # --- CHAT FLOW RESOURCES ---
 
-        # 5. DynamoDB Table for Chat History (as per diagram)
+        # 5. DynamoDB Table for Chat History 
         chat_history_table = dynamodb.Table(self, "CovbChatHistoryTable",
             partition_key=dynamodb.Attribute(name="SessionId", type=dynamodb.AttributeType.STRING),
             billing_mode=dynamodb.BillingMode.PAY_PER_REQUEST,
             removal_policy=RemovalPolicy.DESTROY,
         )
 
-        # --- KENDRA RESOURCES (TEMPORARILY DISABLED) ---
+        # KENDRA RESOURCES (TEMPORARILY DISABLED)
         """
         # 6. Kendra Index
         kendra_index = kendra.CfnIndex(self, "CovbKendraIndex",
@@ -122,7 +121,7 @@ class CovbChatbotStack(Stack):
             },
         )
 
-        # 9. Lex Bot (as per diagram)
+        # 9. Lex Bot 
         lex_role = iam.Role(self, "CovbLexRole",
             assumed_by=iam.ServicePrincipal("lexv2.amazonaws.com"),
         )
@@ -161,7 +160,7 @@ class CovbChatbotStack(Stack):
             }],
         )
 
-        # Create Bot Alias (required for Lex V2)
+        # Create Bot Alias 
         bot_alias = lex.CfnBotAlias(self, "CovbLexBotAlias",
             bot_alias_name="LATEST",
             bot_id=bot.attr_id,
@@ -186,7 +185,7 @@ class CovbChatbotStack(Stack):
             source_arn=f"arn:{self.partition}:lex:{self.region}:{self.account}:bot-alias/{bot.attr_id}/{bot_alias.attr_bot_alias_id}/*",
         )
 
-        # --- Cfn Outputs ---
+        # Cfn Outputs 
         CfnOutput(self, "CovbDataBucketNameOutput",
             value=processed_data_bucket.bucket_name,
             description="S3 Bucket for storing crawled data",
@@ -217,7 +216,7 @@ class CovbChatbotStack(Stack):
             description="Lex Bot Alias ID",
         )
 
-        # --- UI CREDENTIALS ---
+        # UI CREDENTIALS
 
         # 13. Create a dedicated IAM user for the UI
         ui_user = iam.User(self, "CovbUIAccessUser")
@@ -271,7 +270,7 @@ class CovbChatbotStack(Stack):
             ]
         )
 
-        # Deploy the actual UI from the ui/build folder (built React app)
+        # Deploy the actual UI from the ui/build folder
         s3deploy.BucketDeployment(self, "CovbDeployUI",
             sources=[s3deploy.Source.asset(os.path.join(os.path.dirname(__file__), "../ui/build"))],
             destination_bucket=ui_bucket,
@@ -331,11 +330,12 @@ class CovbChatbotStack(Stack):
 
         chat_api_lambda = lambda_.Function(self, "CovbChatApiLambda",
             runtime=lambda_.Runtime.PYTHON_3_11,
-            handler="index.lambda_handler",
+            handler="index.handler",
             code=lambda_.Code.from_asset(os.path.join(os.path.dirname(__file__), "../lambda/chat-api")),
             environment={
                 "LEX_BOT_ID": bot.attr_id,
                 "LEX_BOT_ALIAS_ID": bot_alias.attr_bot_alias_id,
+                "CHAT_HANDLER_LAMBDA_ARN": chat_handler_lambda.function_arn,
             },
             timeout=Duration.seconds(30),
         )
@@ -344,8 +344,39 @@ class CovbChatbotStack(Stack):
             proxy=False
         )
         chat_resource = api.root.add_resource("chat")
-        chat_resource.add_method("POST")  # POST /chat
+        chat_resource.add_method("POST") 
         chat_resource.add_method(
+            "OPTIONS",
+            MockIntegration(
+                integration_responses=[
+                    IntegrationResponse(
+                        status_code="200",
+                        response_parameters={
+                            "method.response.header.Access-Control-Allow-Headers": "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'",
+                            "method.response.header.Access-Control-Allow-Origin": "'*'",
+                            "method.response.header.Access-Control-Allow-Methods": "'OPTIONS,POST'"
+                        }
+                    )
+                ],
+                passthrough_behavior=PassthroughBehavior.NEVER,
+                request_templates={"application/json": "{\"statusCode\": 200}"}
+            ),
+            method_responses=[
+                MethodResponse(
+                    status_code="200",
+                    response_parameters={
+                        "method.response.header.Access-Control-Allow-Headers": True,
+                        "method.response.header.Access-Control-Allow-Methods": True,
+                        "method.response.header.Access-Control-Allow-Origin": True,
+                    }
+                )
+            ]
+        )
+        
+        # Add streaming endpoint
+        stream_resource = api.root.add_resource("stream")
+        stream_resource.add_method("POST")  
+        stream_resource.add_method(
             "OPTIONS",
             MockIntegration(
                 integration_responses=[
@@ -381,5 +412,13 @@ class CovbChatbotStack(Stack):
             iam.PolicyStatement(
                 actions=["lex:RecognizeText"],
                 resources=[f"arn:aws:lex:{self.region}:{self.account}:bot-alias/{bot.attr_id}/{bot_alias.attr_bot_alias_id}"]
+            )
+        )
+        
+        # Add permission to invoke chat handler Lambda
+        chat_api_lambda.add_to_role_policy(
+            iam.PolicyStatement(
+                actions=["lambda:InvokeFunction"],
+                resources=[chat_handler_lambda.function_arn]
             )
         ) 

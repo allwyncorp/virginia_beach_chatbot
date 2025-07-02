@@ -1,32 +1,125 @@
+"""
+API Gateway Lambda function that handles chat requests and converts responses to Server-Sent Events (SSE).
+"""
 import json
-import boto3
 import os
+import boto3
+from botocore.exceptions import ClientError
 
-def lambda_handler(event, context):
+lambda_client = boto3.client('lambda', region_name=os.environ.get('AWS_REGION'))
+
+CHAT_HANDLER_LAMBDA_ARN = os.environ.get('CHAT_HANDLER_LAMBDA_ARN')
+
+# Extract function name from ARN
+def get_function_name_from_arn(arn):
+    """Extract function name from Lambda ARN"""
+    if not arn:
+        return None
+    return arn.split(':')[-1]
+
+CHAT_HANDLER_FUNCTION_NAME = get_function_name_from_arn(CHAT_HANDLER_LAMBDA_ARN)
+
+
+def create_sse_response(data, event_type='message'):
+    """Create a Server-Sent Event response"""
+    return f"event: {event_type}\ndata: {json.dumps(data)}\n\n"
+
+
+def handler(event, context):
+    """Main Lambda handler function"""
+    
+    print(f"Received event: {json.dumps(event)}")
+    print(f"CHAT_HANDLER_LAMBDA_ARN: {CHAT_HANDLER_LAMBDA_ARN}")
+    print(f"CHAT_HANDLER_FUNCTION_NAME: {CHAT_HANDLER_FUNCTION_NAME}")
+    
     try:
-        body = json.loads(event['body'])
-        message = body['message']
-        session_id = body.get('sessionId', 'web-session')
-        bot_id = os.environ['LEX_BOT_ID']
-        bot_alias_id = os.environ['LEX_BOT_ALIAS_ID']
-        region = os.environ.get('AWS_REGION', 'us-east-1')
-
-        lex = boto3.client('lexv2-runtime', region_name=region)
-        response = lex.recognize_text(
-            botId=bot_id,
-            botAliasId=bot_alias_id,
-            localeId='en_US',
-            sessionId=session_id,
-            text=message
+        # Parse the request body
+        if event.get('body'):
+            body = json.loads(event['body'])
+        else:
+            body = event
+        
+        user_message = body.get('message', '')
+        session_id = body.get('sessionId', 'default-session')
+        
+        print(f"Processing message: '{user_message}' for session: {session_id}")
+        
+        if not CHAT_HANDLER_FUNCTION_NAME:
+            raise Exception("CHAT_HANDLER_LAMBDA_ARN environment variable not set")
+        
+        # Prepare payload for chat-handler Lambda
+        payload = {
+            'inputTranscript': user_message,
+            'sessionId': session_id,
+        }
+        
+        print(f"Invoking chat-handler with payload: {json.dumps(payload)}")
+        
+        # Invoke the chat-handler Lambda
+        response = lambda_client.invoke(
+            FunctionName=CHAT_HANDLER_FUNCTION_NAME,
+            InvocationType='RequestResponse',
+            Payload=json.dumps(payload)
         )
+        
+        print(f"Chat-handler response status: {response['StatusCode']}")
+        
+        # Parse the response from chat-handler
+        response_payload = json.loads(response['Payload'].read())
+        print(f"Chat-handler response payload: {json.dumps(response_payload)}")
+        
+        # Extract the bot response
+        if 'messages' in response_payload and response_payload['messages']:
+            bot_message = response_payload['messages'][0]['content']
+        else:
+            bot_message = "I'm sorry, I couldn't process your request."
+        
+        print(f"Bot response: {bot_message}")
+        
+        # Convert the response to SSE format for streaming
+        sse_data = {
+            'type': 'message',
+            'content': bot_message,
+            'sessionId': session_id
+        }
+        
+        sse_response = create_sse_response(sse_data)
+        
+        # Return the SSE response
         return {
             'statusCode': 200,
-            'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps(response)
+            'headers': {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            },
+            'body': sse_response
         }
-    except Exception as e:
+        
+    except Exception as error:
+        print(f"Error in chat-api: {error}")
+        
+        # Return error as SSE
+        error_data = {
+            'type': 'error',
+            'content': 'I\'m sorry, I encountered a technical issue. Please try again later.',
+            'sessionId': session_id if 'session_id' in locals() else 'unknown'
+        }
+        
+        sse_response = create_sse_response(error_data, 'error')
+        
         return {
             'statusCode': 500,
-            'headers': {'Access-Control-Allow-Origin': '*'},
-            'body': json.dumps({'error': str(e)})
+            'headers': {
+                'Content-Type': 'text/event-stream',
+                'Cache-Control': 'no-cache',
+                'Connection': 'keep-alive',
+                'Access-Control-Allow-Origin': '*',
+                'Access-Control-Allow-Headers': 'Content-Type',
+                'Access-Control-Allow-Methods': 'POST, OPTIONS',
+            },
+            'body': sse_response
         } 

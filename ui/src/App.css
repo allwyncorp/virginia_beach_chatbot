@@ -53,6 +53,21 @@ body {
   align-self: flex-end;
 }
 
+.streaming-indicator {
+  display: inline-block;
+  width: 2px;
+  height: 1.2em;
+  background-color: #007bff;
+  animation: blink 1s infinite;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+}
+
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
 .message-form {
   display: flex;
   padding: 1rem;
@@ -69,6 +84,12 @@ body {
   margin-right: 0.5rem;
 }
 
+.message-input:disabled {
+  background-color: #f5f5f5;
+  color: #999;
+  cursor: not-allowed;
+}
+
 .send-button {
   border: none;
   background-color: #007bff;
@@ -79,6 +100,11 @@ body {
   font-size: 1rem;
 }
 
-.send-button:hover {
+.send-button:hover:not(:disabled) {
   background-color: #0056b3;
+}
+
+.send-button:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
 }

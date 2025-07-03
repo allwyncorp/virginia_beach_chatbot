@@ -53,20 +53,7 @@ body {
   align-self: flex-end;
 }
 
-.streaming-indicator {
-  display: inline-block;
-  width: 2px;
-  height: 1.2em;
-  background-color: #007bff;
-  animation: blink 1s infinite;
-  margin-left: 2px;
-  vertical-align: text-bottom;
-}
 
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
 
 .message-form {
   display: flex;

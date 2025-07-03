@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 
-// const API_URL = process.env.REACT_APP_API_URL || '/chat'; // Set this to your API Gateway endpoint
-const API_URL = "https://t72e3ey24i.execute-api.us-east-1.amazonaws.com/prod";
+// WebSocket endpoint - updated with actual deployment endpoint
+const WEBSOCKET_URL = process.env.REACT_APP_WEBSOCKET_URL || 'wss://ejlemeved3.execute-api.us-east-1.amazonaws.com/prod';
 
 function App() {
   const [messages, setMessages] = useState([
@@ -10,135 +10,188 @@ function App() {
   ]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+  
+  const wsRef = useRef(null);
+  const currentBotMessageRef = useRef(null);
+
+  useEffect(() => {
+    // Initialize WebSocket connection
+    connectWebSocket();
+    
+    return () => {
+      if (wsRef.current) {
+        wsRef.current.close();
+      }
+    };
+  }, []);
+
+  const connectWebSocket = () => {
+    try {
+      console.log('Connecting to WebSocket:', WEBSOCKET_URL);
+      wsRef.current = new WebSocket(WEBSOCKET_URL);
+      
+      wsRef.current.onopen = () => {
+        console.log('WebSocket connected');
+        setIsConnected(true);
+      };
+      
+      wsRef.current.onclose = () => {
+        console.log('WebSocket disconnected');
+        setIsConnected(false);
+        
+        // Attempt to reconnect after 3 seconds
+        setTimeout(() => {
+          if (!isConnected) {
+            connectWebSocket();
+          }
+        }, 3000);
+      };
+      
+      wsRef.current.onerror = (error) => {
+        console.error('WebSocket error:', error);
+      };
+      
+      wsRef.current.onmessage = (event) => {
+        handleWebSocketMessage(event.data);
+      };
+      
+    } catch (error) {
+      console.error('Error connecting to WebSocket:', error);
+    }
+  };
+
+  const handleWebSocketMessage = (data) => {
+    try {
+      const message = JSON.parse(data);
+      console.log('Received WebSocket message:', message);
+      
+      switch (message.type) {
+        case 'message_received':
+          // Server acknowledged the message
+          console.log('Message acknowledged by server');
+          break;
+          
+        case 'stream_start':
+          // Streaming is starting
+          console.log('Streaming started');
+          break;
+          
+        case 'stream_chunk':
+          // Handle streaming chunk
+          handleStreamChunk(message.content);
+          break;
+          
+        case 'stream_complete':
+          // Streaming completed
+          console.log('Streaming completed:', message.full_response);
+          handleStreamComplete(message.full_response);
+          break;
+          
+        case 'stream_error':
+          // Handle streaming error
+          console.error('Streaming error:', message.error);
+          handleStreamError(message.error);
+          break;
+          
+        case 'error':
+          // Handle general error
+          console.error('WebSocket error:', message.error);
+          handleStreamError(message.error);
+          break;
+          
+        default:
+          console.log('Unknown message type:', message.type);
+      }
+    } catch (error) {
+      console.error('Error parsing WebSocket message:', error);
+    }
+  };
+
+  const handleStreamChunk = (chunk) => {
+    setMessages(prev => {
+      const newMessages = [...prev];
+      const botMessageIndex = newMessages.length - 1;
+      
+      if (newMessages[botMessageIndex] && newMessages[botMessageIndex].from === 'bot') {
+        // Append the chunk to the current bot message
+        newMessages[botMessageIndex] = {
+          ...newMessages[botMessageIndex],
+          text: (newMessages[botMessageIndex].text || '') + chunk,
+          isStreaming: true
+        };
+        currentBotMessageRef.current = newMessages[botMessageIndex];
+      }
+      
+      return newMessages;
+    });
+  };
+
+  const handleStreamComplete = (fullResponse) => {
+    setMessages(prev => {
+      const newMessages = [...prev];
+      const botMessageIndex = newMessages.length - 1;
+      
+      if (newMessages[botMessageIndex] && newMessages[botMessageIndex].from === 'bot') {
+        newMessages[botMessageIndex] = {
+          ...newMessages[botMessageIndex],
+          text: fullResponse,
+          isStreaming: false
+        };
+      }
+      
+      return newMessages;
+    });
+    
+    setIsStreaming(false);
+  };
+
+  const handleStreamError = (errorMessage) => {
+    setMessages(prev => {
+      const newMessages = [...prev];
+      const botMessageIndex = newMessages.length - 1;
+      
+      if (newMessages[botMessageIndex] && newMessages[botMessageIndex].from === 'bot') {
+        newMessages[botMessageIndex] = {
+          ...newMessages[botMessageIndex],
+          text: errorMessage,
+          isStreaming: false
+        };
+      }
+      
+      return newMessages;
+    });
+    
+    setIsStreaming(false);
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!inputValue.trim() || isStreaming) return;
+    if (!inputValue.trim() || isStreaming || !isConnected) return;
 
-    console.log('Starting chat request:', inputValue);
+    console.log('Sending message via WebSocket:', inputValue);
 
     const userMessage = { from: 'user', text: inputValue };
     setMessages(prev => [...prev, userMessage]);
     setInputValue('');
     setIsStreaming(true);
 
+    // Add empty bot message that will be filled with streaming content
     setMessages(prev => [...prev, { from: 'bot', text: '', isStreaming: true }]);
 
     try {
-      console.log('Making request to streaming endpoint...');
+      // Send message via WebSocket
+      const message = {
+        message: inputValue,
+        sessionId: `session-${Date.now()}`
+      };
       
-      const response = await fetch(`${API_URL}/stream`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: inputValue,
-          sessionId: 'test-session'
-        })
-      });
-
-      console.log('Response received:', response.status, response.statusText);
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let completeMessage = '';
-      let chunkCount = 0;
-
-      console.log('Starting to read streaming response...');
-
-      // Read the SSE response to get the complete message
-      while (true) {
-        const { done, value } = await reader.read();
-        
-        if (done) {
-          console.log('Finished reading response stream');
-          break;
-        }
-        
-        chunkCount++;
-        const chunk = decoder.decode(value);
-        console.log(`Chunk ${chunkCount}:`, chunk.substring(0, 100) + (chunk.length > 100 ? '...' : ''));
-        
-        const lines = chunk.split('\n');
-        
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              console.log('Parsed SSE data:', data);
-              
-              if (data.type === 'message' && data.content) {
-                completeMessage = data.content;
-                console.log('Complete message received:', completeMessage);
-                break;
-              } else if (data.type === 'error') {
-                throw new Error(data.content || 'Unknown error');
-              }
-            } catch (parseError) {
-              console.error('Error parsing SSE data:', parseError, 'Line:', line);
-            }
-          }
-        }
-      }
-
-      if (!completeMessage) {
-        throw new Error('No message received from server');
-      }
-
-      console.log('Complete message:', completeMessage);
-
-      const words = completeMessage.split(' ');
-      let currentText = '';
-      console.log('Starting typing simulation...');
-      console.log('Words to type:', words);
+      wsRef.current.send(JSON.stringify(message));
+      console.log('Message sent via WebSocket');
       
-      for (let i = 0; i < words.length; i++) {
-        const word = words[i];
-        currentText += (i === 0 ? '' : ' ') + word;
-        
-        console.log(`Typing word ${i + 1}/${words.length}: "${word}" -> Current text: "${currentText}"`);
-        
-        // Update the message with the current text
-        setMessages(prev => {
-          const newMessages = [...prev];
-          const botMessageIndex = newMessages.length - 1;
-          if (newMessages[botMessageIndex] && newMessages[botMessageIndex].from === 'bot') {
-            newMessages[botMessageIndex] = {
-              ...newMessages[botMessageIndex],
-              text: currentText,
-              isStreaming: i < words.length - 1
-            };
-          }
-          return newMessages;
-        });
-
-        if (i < words.length - 1) {
-          const delay = 50 + Math.random() * 100;
-          console.log(`⏱️  Waiting ${Math.round(delay)}ms before next word...`);
-          await new Promise(resolve => setTimeout(resolve, delay));
-        }
-      }
-
-  
-      setIsStreaming(false);
     } catch (error) {
-      console.error('Streaming error:', error);
-      setMessages(prev => {
-        const newMessages = [...prev];
-        const botMessageIndex = newMessages.length - 1;
-        if (newMessages[botMessageIndex] && newMessages[botMessageIndex].from === 'bot') {
-          newMessages[botMessageIndex] = {
-            ...newMessages[botMessageIndex],
-            text: 'Error communicating with backend.',
-            isStreaming: false
-          };
-        }
-        return newMessages;
-      });
-      setIsStreaming(false);
+      console.error('Error sending message:', error);
+      handleStreamError('Error sending message. Please try again.');
     }
   };
 
@@ -161,11 +214,11 @@ function App() {
           type="text"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="Ask a question..."
+          placeholder={isConnected ? "Ask a question..." : "Connecting..."}
           className="message-input"
-          disabled={isStreaming}
+          disabled={isStreaming || !isConnected}
         />
-        <button type="submit" className="send-button" disabled={isStreaming}>
+        <button type="submit" className="send-button" disabled={isStreaming || !isConnected}>
           {isStreaming ? 'Sending...' : 'Send'}
         </button>
       </form>

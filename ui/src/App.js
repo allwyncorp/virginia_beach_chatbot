@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
+import DownloadDialog from './DownloadDialog';
+import { downloadConversation } from './downloadUtils';
 
 // WebSocket endpoint - updated with actual deployment endpoint
 const WEBSOCKET_URL = process.env.REACT_APP_WEBSOCKET_URL || 'wss://ejlemeved3.execute-api.us-east-1.amazonaws.com/prod';
@@ -11,6 +13,8 @@ function App() {
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
+  const [showDownloadDialog, setShowDownloadDialog] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
   
   const wsRef = useRef(null);
   const currentBotMessageRef = useRef(null);
@@ -61,6 +65,38 @@ function App() {
     }
   };
 
+  const stopStreaming = () => {
+    console.log('Stopping streaming...');
+    
+    // Close the WebSocket connection to stop streaming
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.close();
+    }
+    
+    // Reset streaming state
+    setIsStreaming(false);
+    
+    // Update the current bot message to remove streaming state
+    setMessages(prev => {
+      const newMessages = [...prev];
+      const botMessageIndex = newMessages.length - 1;
+      
+      if (newMessages[botMessageIndex] && newMessages[botMessageIndex].from === 'bot') {
+        newMessages[botMessageIndex] = {
+          ...newMessages[botMessageIndex],
+          isStreaming: false
+        };
+      }
+      
+      return newMessages;
+    });
+    
+    // Reconnect WebSocket after a short delay
+    setTimeout(() => {
+      connectWebSocket();
+    }, 100);
+  };
+
   const handleWebSocketMessage = (data) => {
     try {
       const message = JSON.parse(data);
@@ -75,6 +111,7 @@ function App() {
         case 'stream_start':
           // Streaming is starting
           console.log('Streaming started');
+          setIsStreaming(true);
           break;
           
         case 'stream_chunk':
@@ -195,10 +232,42 @@ function App() {
     }
   };
 
+  const handleDownloadClick = () => {
+    setShowDownloadDialog(true);
+  };
+
+  const handleDownloadClose = () => {
+    setShowDownloadDialog(false);
+  };
+
+  const handleDownload = async (format) => {
+    setIsDownloading(true);
+    try {
+      await downloadConversation(messages, format);
+    } catch (error) {
+      console.error('Download failed:', error);
+      // Show a more user-friendly error message
+      const errorMessage = error.message === 'No conversation to download' 
+        ? 'No conversation to download. Please start a conversation first.'
+        : 'Download failed. Please try again.';
+      alert(errorMessage);
+    } finally {
+      setIsDownloading(false);
+    }
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-header">
         <h2>Virginia Beach Assistant</h2>
+        <button 
+          className="download-button"
+          onClick={handleDownloadClick}
+          disabled={messages.length <= 1 || isDownloading}
+          title={messages.length <= 1 ? "No conversation to download" : "Download conversation"}
+        >
+          {isDownloading ? '⏳ Downloading...' : '📥 Download'}
+        </button>
       </div>
       <div className="message-list">
         {messages.map((message, index) => (
@@ -218,10 +287,22 @@ function App() {
           className="message-input"
           disabled={isStreaming || !isConnected}
         />
-        <button type="submit" className="send-button" disabled={isStreaming || !isConnected}>
-          {isStreaming ? 'Sending...' : 'Send'}
+        <button 
+          type={isStreaming ? "button" : "submit"} 
+          className={`send-button ${isStreaming ? 'stop-button' : ''}`} 
+          disabled={!isConnected}
+          onClick={isStreaming ? stopStreaming : undefined}
+        >
+          {isStreaming ? 'Stop' : 'Send'}
         </button>
       </form>
+      
+      <DownloadDialog
+        isOpen={showDownloadDialog}
+        onClose={handleDownloadClose}
+        onDownload={handleDownload}
+        messages={messages}
+      />
     </div>
   );
 }

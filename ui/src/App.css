@@ -58,18 +58,40 @@ body {
 
 .message-form {
   display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
   padding: 1rem;
-  border-top: 1px solid #ddd;
   background-color: #fff;
+}
+
+.message-input,
+.send-button {
+  height: 40px;
+  box-sizing: border-box;
+  padding-top: 0;
+  padding-bottom: 0;
 }
 
 .message-input {
   flex-grow: 1;
   border: 1px solid #ccc;
   border-radius: 20px;
-  padding: 0.5rem 1rem;
+  padding: 8px 1rem 0 1rem;
   font-size: 1rem;
-  margin-right: 0.5rem;
+  resize: none;
+  font-family: inherit;
+  height: 40px;
+  min-height: 40px;
+  max-height: 120px;
+  overflow-y: auto;
+  transition: height 0.2s ease;
+  line-height: 1.4;
+  box-sizing: border-box;
+}
+
+.message-input::placeholder {
+  color: #888;
+  opacity: 1;
 }
 
 .message-input:disabled {
@@ -82,11 +104,13 @@ body {
   border: none;
   background-color: #007bff;
   color: white;
-  padding: 0.5rem 1rem;
+  padding: 0 1rem;
   border-radius: 20px;
   cursor: pointer;
   font-size: 1rem;
   transition: background-color 0.2s ease;
+  min-width: 60px;
+  align-self: flex-end;
 }
 
 .send-button:hover:not(:disabled) {
@@ -128,4 +152,77 @@ body {
   color: rgba(255, 255, 255, 0.5);
   cursor: not-allowed;
   border-color: rgba(255, 255, 255, 0.1);
+}
+
+.message-content {
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.message-content p {
+  margin: 0;
+  flex-grow: 1;
+}
+
+.copy-button {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0.25rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  opacity: 0.6;
+  transition: all 0.2s ease;
+  min-width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.message:hover .copy-button {
+  opacity: 1;
+}
+
+.copy-button:hover {
+  background-color: rgba(0, 0, 0, 0.1);
+  opacity: 1;
+}
+
+.message.user .copy-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+.copy-button.copied {
+  opacity: 1;
+  color: #28a745;
+  background-color: rgba(40, 167, 69, 0.1);
+}
+
+.copy-button.error {
+  opacity: 1;
+  color: #dc3545;
+  background-color: rgba(220, 53, 69, 0.1);
+}
+
+.copy-button:disabled {
+  cursor: default;
+}
+
+.copy-button-row {
+  display: flex;
+  margin-top: -0.5rem;
+  margin-bottom: 0.5rem;
+  max-width: 70%;
+}
+.copy-button-row.bot {
+  align-self: flex-start;
+  margin-left: 0.5rem;
+}
+.copy-button-row.user {
+  align-self: flex-end;
+  margin-right: 0.5rem;
 }

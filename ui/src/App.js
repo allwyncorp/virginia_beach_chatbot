@@ -213,6 +213,12 @@ function App() {
     setInputValue('');
     setIsStreaming(true);
 
+    // Reset textarea height
+    const textarea = e.target.querySelector('textarea');
+    if (textarea) {
+      textarea.style.height = '36px';
+    }
+
     // Add empty bot message that will be filled with streaming content
     setMessages(prev => [...prev, { from: 'bot', text: '', isStreaming: true }]);
 
@@ -229,6 +235,28 @@ function App() {
     } catch (error) {
       console.error('Error sending message:', error);
       handleStreamError('Error sending message. Please try again.');
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSubmit(e);
+    }
+  };
+
+  const handleInputChange = (e) => {
+    const value = e.target.value;
+    setInputValue(value);
+    
+    // Only auto-resize if there are newlines in the text
+    const textarea = e.target;
+    if (value.includes('\n')) {
+      textarea.style.height = 'auto';
+      textarea.style.height = Math.min(textarea.scrollHeight, 120) + 'px';
+    } else {
+      // Reset to single line if no newlines
+      textarea.style.height = 'auto';
     }
   };
 
@@ -256,6 +284,79 @@ function App() {
     }
   };
 
+  const handleCopyMessage = async (text, messageIndex) => {
+    try {
+      // Try modern Clipboard API first
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        // Fallback for older browsers
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        textArea.style.top = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        
+        const successful = document.execCommand('copy');
+        document.body.removeChild(textArea);
+        
+        if (!successful) {
+          throw new Error('Copy command failed');
+        }
+      }
+      
+      // Update the message to show copy confirmation
+      setMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[messageIndex] = {
+          ...newMessages[messageIndex],
+          copyStatus: 'copied'
+        };
+        return newMessages;
+      });
+      
+      // Reset copy status after 2 seconds
+      setTimeout(() => {
+        setMessages(prev => {
+          const newMessages = [...prev];
+          newMessages[messageIndex] = {
+            ...newMessages[messageIndex],
+            copyStatus: null
+          };
+          return newMessages;
+        });
+      }, 2000);
+      
+    } catch (error) {
+      console.error('Failed to copy message:', error);
+      
+      // Show error feedback
+      setMessages(prev => {
+        const newMessages = [...prev];
+        newMessages[messageIndex] = {
+          ...newMessages[messageIndex],
+          copyStatus: 'error'
+        };
+        return newMessages;
+      });
+      
+      // Reset error status after 2 seconds
+      setTimeout(() => {
+        setMessages(prev => {
+          const newMessages = [...prev];
+          newMessages[messageIndex] = {
+            ...newMessages[messageIndex],
+            copyStatus: null
+          };
+          return newMessages;
+        });
+      }, 2000);
+    }
+  };
+
   return (
     <div className="chat-container">
       <div className="chat-header">
@@ -271,21 +372,36 @@ function App() {
       </div>
       <div className="message-list">
         {messages.map((message, index) => (
-          <div key={index} className={`message ${message.from}`}>
-            <p>
-              {message.text}
-            </p>
-          </div>
+          <React.Fragment key={index}>
+            <div className={`message ${message.from}`}>
+              <div className="message-content">
+                <p>
+                  {message.text}
+                </p>
+              </div>
+            </div>
+            <div className={`copy-button-row ${message.from}`}>
+              <button
+                className={`copy-button ${message.copyStatus || ''}`}
+                onClick={() => handleCopyMessage(message.text, index)}
+                title={message.copyStatus === 'copied' ? 'Copied!' : message.copyStatus === 'error' ? 'Copy failed' : 'Copy message'}
+                disabled={message.copyStatus === 'copied' || message.copyStatus === 'error'}
+              >
+                {message.copyStatus === 'copied' ? '✓' : message.copyStatus === 'error' ? '✗' : '📋'}
+              </button>
+            </div>
+          </React.Fragment>
         ))}
       </div>
       <form onSubmit={handleSubmit} className="message-form">
-        <input
-          type="text"
+        <textarea
           value={inputValue}
-          onChange={(e) => setInputValue(e.target.value)}
+          onChange={handleInputChange}
+          onKeyDown={handleKeyDown}
           placeholder={isConnected ? "Ask a question..." : "Connecting..."}
           className="message-input"
           disabled={isStreaming || !isConnected}
+          rows="1"
         />
         <button 
           type={isStreaming ? "button" : "submit"} 

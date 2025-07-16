@@ -1,22 +1,23 @@
 #!/usr/bin/env python3
+import os
+import sys
 import aws_cdk as cdk
 from iac_stack import CovbChatbotStack
 
 app = cdk.App()
-CovbChatbotStack(app, "vb-chatbot-v2",
-    # If you don't specify 'env', this stack will be environment-agnostic.
-    # Account/Region-dependent features and context lookups will not work,
-    # but a single synthesized template can be deployed anywhere.
 
-    # Uncomment the next line to specialize this stack for the AWS Account
-    # and Region that are implied by the current CLI configuration.
-    # env=cdk.Environment(account=os.getenv('CDK_DEFAULT_ACCOUNT'), region=os.getenv('CDK_DEFAULT_REGION')),
+# Get stack name from environment variable - required
+env_name = os.environ.get("ENV_NAME")
+if not env_name:
+    print("ERROR: ENV_NAME environment variable is required!")
+    print("Usage: export ENV_NAME=environment && cdk deploy")
+    sys.exit(1)
 
-    # Uncomment the next line if you know exactly what Account and Region you
-    # want to deploy the stack to.
-    # env=cdk.Environment(account='123456789012', region='us-east-1'),
+stack_name = f"{env_name}-vb-chatbot"
 
-    # For more information, see https://docs.aws.amazon.com/cdk/latest/guide/environments.html
+CovbChatbotStack(app, stack_name,
+    # Deploy to the customer's AWS account in Virginia
+    env=cdk.Environment(account='152265074049', region='us-east-1'),
 )
 
 app.synth() 

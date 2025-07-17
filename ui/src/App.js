@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import DownloadDialog from './DownloadDialog';
 import { downloadConversation } from './downloadUtils';
+import CitationComponent from './CitationComponent';
 
 // WebSocket endpoint - updated with actual deployment endpoint
 const WEBSOCKET_URL = process.env.REACT_APP_WEBSOCKET_URL || 'wss://ejlemeved3.execute-api.us-east-1.amazonaws.com/prod';
@@ -165,14 +166,36 @@ function App() {
   };
 
   const handleStreamComplete = (fullResponse) => {
+    console.log('Handling stream complete with response:', fullResponse);
     setMessages(prev => {
       const newMessages = [...prev];
       const botMessageIndex = newMessages.length - 1;
       
       if (newMessages[botMessageIndex] && newMessages[botMessageIndex].from === 'bot') {
+        // Try to parse citations from the response
+        let citations = [];
+        let text = fullResponse;
+        
+        try {
+          // Check if the response contains citation data
+          if (fullResponse.includes('"citations"') || fullResponse.includes('"content"')) {
+            console.log('Found citation data in response, parsing...');
+            const parsed = JSON.parse(fullResponse);
+            if (parsed.content && parsed.citations) {
+              text = parsed.content;
+              citations = parsed.citations;
+              console.log('Successfully parsed citations:', citations);
+            }
+          }
+        } catch (error) {
+          // If parsing fails, treat as plain text
+          console.log('Response is plain text, no citations found:', error);
+        }
+        
         newMessages[botMessageIndex] = {
           ...newMessages[botMessageIndex],
-          text: fullResponse,
+          text: text,
+          citations: citations,
           isStreaming: false
         };
       }
@@ -286,13 +309,22 @@ function App() {
 
   const handleCopyMessage = async (text, messageIndex) => {
     try {
+      // Get the message to check if it has citations
+      const message = messages[messageIndex];
+      let textToCopy = text;
+      
+      // If it's a bot message with citations, only copy the text content
+      if (message.from === 'bot' && message.citations && message.citations.length > 0) {
+        textToCopy = message.text;
+      }
+      
       // Try modern Clipboard API first
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        await navigator.clipboard.writeText(text);
+        await navigator.clipboard.writeText(textToCopy);
       } else {
         // Fallback for older browsers
         const textArea = document.createElement('textarea');
-        textArea.value = text;
+        textArea.value = textToCopy;
         textArea.style.position = 'fixed';
         textArea.style.left = '-999999px';
         textArea.style.top = '-999999px';
@@ -375,9 +407,13 @@ function App() {
           <React.Fragment key={index}>
             <div className={`message ${message.from}`}>
               <div className="message-content">
-                <p>
-                  {message.text}
-                </p>
+                {message.from === 'bot' && message.citations && message.citations.length > 0 ? (
+                  <CitationComponent content={message.text} citations={message.citations} />
+                ) : (
+                  <p>
+                    {message.text}
+                  </p>
+                )}
               </div>
             </div>
             <div className={`copy-button-row ${message.from}`}>

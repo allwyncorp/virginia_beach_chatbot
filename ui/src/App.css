@@ -226,3 +226,47 @@ body {
   align-self: flex-end;
   margin-right: 0.5rem;
 }
+
+/* Citation Styles */
+.citation-content {
+  width: 100%;
+}
+
+.citation-content p {
+  margin: 0 0 0.5rem 0;
+  line-height: 1.5;
+}
+
+.citations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.citation-link {
+  color: #007bff;
+  text-decoration: none;
+  font-size: 0.875rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  background-color: rgba(0, 123, 255, 0.1);
+  transition: all 0.2s ease;
+  display: inline-block;
+  border: 1px solid transparent;
+}
+
+.citation-link:hover {
+  background-color: rgba(0, 123, 255, 0.2);
+  border-color: rgba(0, 123, 255, 0.3);
+  text-decoration: underline;
+}
+
+.citation-link:focus {
+  outline: 2px solid #007bff;
+  outline-offset: 2px;
+}
+
+.citation-link:active {
+  background-color: rgba(0, 123, 255, 0.3);
+}

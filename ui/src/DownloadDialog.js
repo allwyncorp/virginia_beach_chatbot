@@ -3,7 +3,6 @@ import './DownloadDialog.css';
 
 const DownloadDialog = ({ isOpen, onClose, onDownload, messages }) => {
   const [selectedFormat, setSelectedFormat] = useState('txt');
-  const [rememberPreference, setRememberPreference] = useState(false);
 
   const formatOptions = [
     {
@@ -61,9 +60,6 @@ const DownloadDialog = ({ isOpen, onClose, onDownload, messages }) => {
   }, [isOpen, onClose]);
 
   const handleDownload = () => {
-    if (rememberPreference) {
-      localStorage.setItem('preferredDownloadFormat', selectedFormat);
-    }
     onDownload(selectedFormat);
     onClose();
   };
@@ -122,17 +118,6 @@ const DownloadDialog = ({ isOpen, onClose, onDownload, messages }) => {
                     </div>
                   </div>
                 ))}
-              </div>
-              <div className="download-dialog-preferences">
-                <label className="preference-checkbox">
-                  <input
-                    type="checkbox"
-                    checked={rememberPreference}
-                    onChange={(e) => setRememberPreference(e.target.checked)}
-                  />
-                  <span className="checkmark"></span>
-                  Remember my preferred format
-                </label>
               </div>
             </>
           )}

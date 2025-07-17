@@ -28,7 +28,24 @@ const formatAsText = (messages, metadata) => {
   
   messages.forEach((message, index) => {
     const sender = message.from === 'user' ? 'User' : 'Virginia Beach Assistant';
-    content += `${sender}:\n${message.text}\n\n`;
+    
+    // Extract clean text content (remove citation links)
+    let cleanText = message.text;
+    
+    // If message has structured content with citations, extract only the content
+    if (typeof message.text === 'string' && message.text.includes('"content"')) {
+      try {
+        const parsed = JSON.parse(message.text);
+        if (parsed.content) {
+          cleanText = parsed.content;
+        }
+      } catch (e) {
+        // If parsing fails, use the original text
+        cleanText = message.text;
+      }
+    }
+    
+    content += `${sender}:\n${cleanText}\n\n`;
   });
   
   return content;
@@ -43,7 +60,24 @@ const formatAsMarkdown = (messages, metadata) => {
   
   messages.forEach((message, index) => {
     const sender = message.from === 'user' ? '**User:**' : '**Virginia Beach Assistant:**';
-    content += `${sender}\n\n${message.text}\n\n`;
+    
+    // Extract clean text content (remove citation links)
+    let cleanText = message.text;
+    
+    // If message has structured content with citations, extract only the content
+    if (typeof message.text === 'string' && message.text.includes('"content"')) {
+      try {
+        const parsed = JSON.parse(message.text);
+        if (parsed.content) {
+          cleanText = parsed.content;
+        }
+      } catch (e) {
+        // If parsing fails, use the original text
+        cleanText = message.text;
+      }
+    }
+    
+    content += `${sender}\n\n${cleanText}\n\n`;
   });
   
   return content;
@@ -56,7 +90,24 @@ const formatAsCSV = (messages, metadata) => {
   messages.forEach((message, index) => {
     const sender = message.from === 'user' ? 'User' : 'Virginia Beach Assistant';
     const timestamp = new Date().toISOString(); // Could be enhanced with actual timestamps
-    const escapedMessage = message.text.replace(/"/g, '""'); // Escape quotes for CSV
+    
+    // Extract clean text content (remove citation links)
+    let cleanText = message.text;
+    
+    // If message has structured content with citations, extract only the content
+    if (typeof message.text === 'string' && message.text.includes('"content"')) {
+      try {
+        const parsed = JSON.parse(message.text);
+        if (parsed.content) {
+          cleanText = parsed.content;
+        }
+      } catch (e) {
+        // If parsing fails, use the original text
+        cleanText = message.text;
+      }
+    }
+    
+    const escapedMessage = cleanText.replace(/"/g, '""'); // Escape quotes for CSV
     content += `"${timestamp}","${sender}","${escapedMessage}"\n`;
   });
   
@@ -98,8 +149,24 @@ const generatePDF = async (messages, metadata) => {
     pdf.setFontSize(10);
     pdf.setFont('helvetica', 'normal');
     
+    // Extract clean text content (remove citation links)
+    let cleanText = message.text;
+    
+    // If message has structured content with citations, extract only the content
+    if (typeof message.text === 'string' && message.text.includes('"content"')) {
+      try {
+        const parsed = JSON.parse(message.text);
+        if (parsed.content) {
+          cleanText = parsed.content;
+        }
+      } catch (e) {
+        // If parsing fails, use the original text
+        cleanText = message.text;
+      }
+    }
+    
     // Split long messages into multiple lines
-    const words = message.text.split(' ');
+    const words = cleanText.split(' ');
     let line = '';
     
     for (let word of words) {
@@ -184,11 +251,27 @@ const generateDOCX = async (messages, metadata) => {
       })
     );
     
+    // Extract clean text content (remove citation links)
+    let cleanText = message.text;
+    
+    // If message has structured content with citations, extract only the content
+    if (typeof message.text === 'string' && message.text.includes('"content"')) {
+      try {
+        const parsed = JSON.parse(message.text);
+        if (parsed.content) {
+          cleanText = parsed.content;
+        }
+      } catch (e) {
+        // If parsing fails, use the original text
+        cleanText = message.text;
+      }
+    }
+    
     children.push(
       new Paragraph({
         children: [
           new TextRun({
-            text: message.text,
+            text: cleanText,
             bold: false
           })
         ],

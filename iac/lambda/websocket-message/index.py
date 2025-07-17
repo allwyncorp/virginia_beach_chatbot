@@ -31,12 +31,52 @@ connections_table = dynamodb.Table(WEBSOCKET_CONNECTIONS_TABLE)
 KENDRA_ENABLED = KENDRA_INDEX_ID and KENDRA_INDEX_ID != ''
 
 # TEMPORARY for TESTING 
-FAKE_KENDRA_CONTEXT = """
-Parking is available in the 25th Street Municipal Garage, located at 209 25th St, Virginia Beach, VA 23451.
+FAKE_KENDRA_CONTEXT_PARKING = {
+    "content": """Parking is available in the 25th Street Municipal Garage, located at 209 25th St, Virginia Beach, VA 23451.
+
 The garage is open 24 hours a day, 7 days a week. The rate is $2.00 per hour, with a daily maximum of $20.00.
+
 Special event parking rates may apply. Payment can be made via credit card at the exit gate.
-Overnight parking is permitted.
-"""
+
+Overnight parking is permitted.""",
+    "citations": [
+        {
+            "url": "https://pw.virginiabeach.gov/city-property/parking",
+            "sourceTitle": "Municipal Parking Information"
+        }
+    ]
+}
+
+FAKE_KENDRA_CONTEXT_LIBRARY = {
+    "content": """Library permits are required for hosting events at Virginia Beach Public Library facilities.
+
+Applications must be submitted at least 30 days in advance and include a detailed event plan.
+
+Permit fees vary based on room size and duration, ranging from $50-$200 per event.
+
+Insurance requirements may apply for events with more than 50 attendees.""",
+    "citations": [
+        {
+            "paragraph": 0,
+            "url": "https://libraries.virginiabeach.gov/books-more/digital-library",
+            "sourceTitle": "Library Event Permits"
+        },
+        {
+            "paragraph": 2,
+            "url": "https://libraries.virginiabeach.gov/library-account/pay-my-fines-fees",
+            "sourceTitle": "Library Permit Fees"
+        }
+    ]
+}
+
+FAKE_KENDRA_CONTEXT_NO_CITATIONS = {
+    "content": """This is general information about Virginia Beach services.
+
+The city offers various programs and activities for residents.
+
+Contact the city office for more details about specific services.""",
+    "citations": []
+}
 
 def send_websocket_message(connection_id, message_data, endpoint_url):
     """Send message to WebSocket client"""
@@ -112,7 +152,19 @@ def search_kendra(user_message):
     """Search Kendra for relevant information"""
     if not KENDRA_ENABLED:
         print("Kendra is not configured; using FAKE_KENDRA_CONTEXT for testing")
-        return [FAKE_KENDRA_CONTEXT.strip()]
+        
+        # Return different contexts based on the user's question
+        user_message_lower = user_message.lower()
+        
+        if 'parking' in user_message_lower:
+            print("Using parking context with 1 citation")
+            return [FAKE_KENDRA_CONTEXT_PARKING]
+        elif 'library' in user_message_lower or 'permit' in user_message_lower:
+            print("Using library context with 2 citations")
+            return [FAKE_KENDRA_CONTEXT_LIBRARY]
+        else:
+            print("Using general context with no citations")
+            return [FAKE_KENDRA_CONTEXT_NO_CITATIONS]
     
     try:
         print(f'Querying Kendra with message: "{user_message}"')
@@ -138,18 +190,36 @@ def search_kendra(user_message):
 def stream_response_with_context(connection_id, user_message, context_snippets, endpoint_url):
     """Stream response using Bedrock with context"""
     if context_snippets:
-        context = '\n\n'.join(context_snippets)
+        # Handle structured context with citations
+        citations = []
+        context_text = ""
+        
+        for snippet in context_snippets:
+            if isinstance(snippet, dict) and 'content' in snippet and 'citations' in snippet:
+                # Structured context with citations
+                print(f"Found structured snippet with citations: {snippet['citations']}")
+                context_text += snippet['content'] + "\n\n"
+                citations.extend(snippet['citations'])
+            else:
+                # Plain text context
+                print("Found plain text snippet")
+                context_text += str(snippet) + "\n\n"
+        
+        context_text = context_text.strip()
+        print(f"Final context_text length: {len(context_text)}")
+        print(f"Final citations: {citations}")
+        
         prompt = f"""
-Human: You are a helpful assistant for the City of Virginia Beach. Use the following excerpts from the official city website to answer the user's question. Do not use any other information. If the answer is not in the excerpts, say "I'm sorry, I couldn't find information about that on the city's website."
+Human: You are a professional assistant for the City of Virginia Beach. Answer the user's question using only the provided information from the city's official sources. Provide clear, concise, and professional responses without mentioning "excerpts" or "based on excerpts." If the information is not available in the provided context, politely inform them that you don't have specific information about that topic and suggest contacting the city directly.
 
 Here is the user's question:
 <question>
 {user_message}
 </question>
 
-Here are the relevant excerpts from the website:
+Here is the relevant information from the city's official sources:
 <context>
-{context}
+{context_text}
 </context>
 
 Assistant:"""
@@ -212,12 +282,24 @@ Assistant:"""
                 # Small delay to make streaming visible
                 time.sleep(0.05)
         
-        # Send completion message
-        send_websocket_message(connection_id, {
+        # Send completion message with citations if available
+        completion_data = {
             'type': 'stream_complete',
             'full_response': full_response,
             'total_chunks': chunk_count
-        }, endpoint_url)
+        }
+        
+        # Include citations in the response if available
+        if citations:
+            print(f"Including citations in response: {citations}")
+            completion_data['full_response'] = json.dumps({
+                'content': full_response,
+                'citations': citations
+            })
+        else:
+            print("No citations to include in response")
+        
+        send_websocket_message(connection_id, completion_data, endpoint_url)
         
         return full_response.strip()
         
@@ -233,7 +315,7 @@ Assistant:"""
 def stream_general_response(connection_id, user_message, endpoint_url):
     """Stream general response without knowledge retrieval"""
     prompt = f"""
-Human: You are a helpful and friendly assistant for the City of Virginia Beach. The user has asked a general question that doesn't require specific city knowledge. Respond in a helpful, conversational manner as a city representative.
+Human: You are a professional assistant for the City of Virginia Beach. The user has asked a general question that doesn't require specific city knowledge. Respond in a helpful, professional manner as a city representative.
 
 Here is the user's question:
 <question>
@@ -360,6 +442,12 @@ def handler(event, context):
         
         # Step 1: Determine if knowledge retrieval is needed
         needs_knowledge = should_retrieve_knowledge(user_message)
+        print(f"Knowledge retrieval decision: {needs_knowledge}")
+        
+        # TEMPORARY: Force knowledge retrieval for testing citations
+        if 'parking' in user_message.lower() or 'library' in user_message.lower() or 'permit' in user_message.lower():
+            needs_knowledge = True
+            print("Forcing knowledge retrieval for parking/library-related question")
         
         if needs_knowledge:
             # Step 2: Search Kendra for relevant information

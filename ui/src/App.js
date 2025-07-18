@@ -5,7 +5,7 @@ import { downloadConversation } from './downloadUtils';
 import CitationComponent from './CitationComponent';
 
 // WebSocket endpoint - updated with actual deployment endpoint
-const WEBSOCKET_URL = process.env.REACT_APP_WEBSOCKET_URL || 'wss://ejlemeved3.execute-api.us-east-1.amazonaws.com/prod';
+const WEBSOCKET_URL = process.env.REACT_APP_WEBSOCKET_URL || 'wss://5c98whx3bg.execute-api.us-east-1.amazonaws.com/prod';
 
 function App() {
   const [messages, setMessages] = useState([
@@ -181,11 +181,16 @@ function App() {
           if (fullResponse.includes('"citations"') || fullResponse.includes('"content"')) {
             console.log('Found citation data in response, parsing...');
             const parsed = JSON.parse(fullResponse);
+            console.log('Parsed response:', parsed);
             if (parsed.content && parsed.citations) {
               text = parsed.content;
               citations = parsed.citations;
               console.log('Successfully parsed citations:', citations);
+            } else {
+              console.log('Missing content or citations in parsed response');
             }
+          } else {
+            console.log('No citation markers found in response');
           }
         } catch (error) {
           // If parsing fails, treat as plain text

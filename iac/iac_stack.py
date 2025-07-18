@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import os
+import json
 import aws_cdk as cdk
 from aws_cdk import (
     Stack,
@@ -87,6 +88,7 @@ class CovbChatbotStack(Stack):
                 iam.ManagedPolicy.from_aws_managed_policy_name("service-role/AWSLambdaBasicExecutionRole"),
                 iam.ManagedPolicy.from_aws_managed_policy_name("AmazonBedrockFullAccess"),
                 iam.ManagedPolicy.from_aws_managed_policy_name("AmazonKendraFullAccess"),
+                iam.ManagedPolicy.from_aws_managed_policy_name("AmazonAPIGatewayInvokeFullAccess"),
             ]
         )
 
@@ -120,6 +122,47 @@ class CovbChatbotStack(Stack):
                 f"{self.processed_data_bucket.bucket_arn}/*",
             ]
         ))
+
+        # Add specific Bedrock permissions for Claude Sonnet 4
+        lambda_role.add_to_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=[
+                "bedrock:InvokeModel",
+                "bedrock:InvokeModelWithResponseStream",
+            ],
+            resources=[
+                "arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-sonnet-4-20250514-v1:0",
+            ]
+        ))
+
+        # Create CloudWatch Logs role for the account
+        cloudwatch_logs_role = iam.Role(
+            self, "CloudWatchLogsRole",
+            role_name="CloudWatchLogsRole",
+            assumed_by=iam.ServicePrincipal("logs.amazonaws.com"),
+            managed_policies=[
+                iam.ManagedPolicy.from_aws_managed_policy_name("CloudWatchLogsFullAccess"),
+            ],
+            description="Role for CloudWatch Logs to access Lambda log groups"
+        )
+
+        # Add CloudWatch Logs permissions to Lambda role
+        lambda_role.add_to_policy(iam.PolicyStatement(
+            effect=iam.Effect.ALLOW,
+            actions=[
+                "logs:CreateLogGroup",
+                "logs:CreateLogStream",
+                "logs:PutLogEvents",
+                "logs:DescribeLogGroups",
+                "logs:DescribeLogStreams",
+            ],
+            resources=[
+                f"arn:aws:logs:{self.region}:{self.account}:log-group:/aws/lambda/*",
+                f"arn:aws:logs:{self.region}:{self.account}:log-group:/aws/lambda/*:*",
+            ]
+        ))
+
+
 
         # WebSocket Lambda functions
         websocket_connect_handler = _lambda.Function(
@@ -155,8 +198,8 @@ class CovbChatbotStack(Stack):
             environment={
                 "CHAT_HISTORY_TABLE": self.chat_history_table.table_name,
                 "WEBSOCKET_CONNECTIONS_TABLE": self.websocket_connections_table.table_name,
-                "BEDROCK_MODEL_ID": "anthropic.claude-instant-v1",
-                "KENDRA_INDEX_ID": os.environ.get("KENDRA_INDEX_ID", ""),
+                "BEDROCK_INFERENCE_PROFILE_ID": "arn:aws:bedrock:us-east-1:152265074049:inference-profile/us.anthropic.claude-sonnet-4-20250514-v1:0",
+                "KENDRA_INDEX_ID": "955dcb11-48e6-45c5-abf0-101ad1f97092",
                 "PROCESSED_DATA_BUCKET": self.processed_data_bucket.bucket_name,
             },
             timeout=Duration.seconds(300),  # 5 minutes for streaming
@@ -226,7 +269,15 @@ class CovbChatbotStack(Stack):
             source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{websocket_api.api_id}/*",
         )
 
+        # Add specific permission for the Lambda to manage WebSocket connections
+        websocket_message_handler.add_permission(
+            "WebSocketManageConnectionsPermission",
+            principal=iam.ServicePrincipal("apigateway.amazonaws.com"),
+            source_arn=f"arn:aws:execute-api:{self.region}:{self.account}:{websocket_api.api_id}/*",
+        )
+
         # Add WebSocket API Gateway permissions to Lambda role
+        # This is the CORRECT configuration that should work
         lambda_role.add_to_policy(iam.PolicyStatement(
             effect=iam.Effect.ALLOW,
             actions=[

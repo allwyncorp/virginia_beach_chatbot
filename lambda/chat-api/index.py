@@ -29,4 +29,4 @@ def lambda_handler(event, context):
             'statusCode': 500,
             'headers': {'Access-Control-Allow-Origin': '*'},
             'body': json.dumps({'error': str(e)})
-        } 
+        }

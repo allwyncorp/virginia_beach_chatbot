@@ -1,0 +1,319 @@
+.download-dialog-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  backdrop-filter: blur(2px);
+}
+
+.download-dialog {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: dialogSlideIn 0.3s ease-out;
+}
+
+@keyframes dialogSlideIn {
+  from {
+    opacity: 0;
+    transform: scale(0.95) translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.download-dialog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1.5rem 1.5rem 0 1.5rem;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 1rem;
+  background: white;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+
+.download-dialog-header h3 {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #111827;
+}
+
+.download-dialog-close {
+  background: none;
+  border: none;
+  font-size: 1.5rem;
+  cursor: pointer;
+  color: #6b7280;
+  padding: 0.25rem;
+  border-radius: 4px;
+  transition: all 0.2s;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.download-dialog-close:hover {
+  background-color: #f3f4f6;
+  color: #374151;
+}
+
+.download-dialog-content {
+  padding: 1.5rem;
+  overflow-y: auto;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.download-dialog-description {
+  margin: 0 0 1.5rem 0;
+  color: #6b7280;
+  font-size: 0.875rem;
+}
+
+.no-conversation-message {
+  text-align: center;
+  padding: 2rem 1rem;
+  color: #6b7280;
+}
+
+.no-conversation-message p {
+  margin: 0;
+  font-size: 1rem;
+  line-height: 1.5;
+}
+
+.format-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin-bottom: 1.5rem;
+}
+
+.format-option {
+  display: flex;
+  align-items: flex-start;
+  padding: 1rem;
+  border: 2px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s;
+  background: white;
+}
+
+.format-option:hover {
+  border-color: #d1d5db;
+  background-color: #f9fafb;
+}
+
+.format-option.selected {
+  border-color: #007bff;
+  background-color: #f0f8ff;
+}
+
+.format-option:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 3px rgba(0, 123, 255, 0.1);
+}
+
+.format-option-radio {
+  margin-right: 0.75rem;
+  margin-top: 0.125rem;
+}
+
+.radio-button {
+  width: 18px;
+  height: 18px;
+  border: 2px solid #d1d5db;
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.radio-button.checked {
+  border-color: #007bff;
+  background-color: #007bff;
+}
+
+.radio-button.checked::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 6px;
+  height: 6px;
+  background-color: white;
+  border-radius: 50%;
+}
+
+.format-option-content {
+  flex: 1;
+}
+
+.format-option-label {
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 0.25rem;
+}
+
+.format-option-description {
+  font-size: 0.875rem;
+  color: #6b7280;
+  line-height: 1.4;
+}
+
+.download-dialog-preferences {
+  margin-bottom: 1rem;
+}
+
+.preference-checkbox {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  font-size: 0.875rem;
+  color: #374151;
+  position: relative;
+}
+
+.preference-checkbox input[type="checkbox"] {
+  position: absolute;
+  opacity: 0;
+  cursor: pointer;
+  height: 0;
+  width: 0;
+}
+
+.checkmark {
+  height: 18px;
+  width: 18px;
+  background-color: white;
+  border: 2px solid #d1d5db;
+  border-radius: 3px;
+  margin-right: 0.5rem;
+  position: relative;
+  transition: all 0.2s;
+}
+
+.preference-checkbox:hover input ~ .checkmark {
+  border-color: #007bff;
+}
+
+.preference-checkbox input:checked ~ .checkmark {
+  background-color: #007bff;
+  border-color: #007bff;
+}
+
+.checkmark:after {
+  content: "";
+  position: absolute;
+  display: none;
+}
+
+.preference-checkbox input:checked ~ .checkmark:after {
+  display: block;
+}
+
+.preference-checkbox .checkmark:after {
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.download-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem 1.5rem 1.5rem;
+  border-top: 1px solid #e5e7eb;
+  background-color: #f9fafb;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+
+.download-dialog-button {
+  padding: 0.5rem 1rem;
+  border-radius: 6px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid transparent;
+  min-width: 80px;
+}
+
+.cancel-button {
+  background-color: white;
+  color: #374151;
+  border-color: #d1d5db;
+}
+
+.cancel-button:hover {
+  background-color: #f9fafb;
+  border-color: #9ca3af;
+}
+
+.download-button {
+  background-color: #007bff;
+  color: white;
+  border-color: #007bff;
+}
+
+.download-button:hover:not(:disabled) {
+  background-color: #0056b3;
+  border-color: #0056b3;
+}
+
+.download-button:disabled {
+  background-color: #9ca3af;
+  border-color: #9ca3af;
+  cursor: not-allowed;
+}
+
+/* Responsive design */
+@media (max-width: 640px) {
+  .download-dialog {
+    width: 95%;
+    margin: 1rem;
+  }
+  
+  .download-dialog-header,
+  .download-dialog-content,
+  .download-dialog-actions {
+    padding-left: 1rem;
+    padding-right: 1rem;
+  }
+  
+  .download-dialog-actions {
+    flex-direction: column-reverse;
+  }
+  
+  .download-dialog-button {
+    width: 100%;
+  }
+} 
